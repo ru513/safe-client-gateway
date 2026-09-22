@@ -29,6 +29,7 @@ function uniqueConstraintError(constraint: string): QueryFailedError {
 
 describe('UsersRepository', () => {
   const walletsRepository = {
+    isLinkedToActiveUser: vi.fn(),
     findOneByAddress: vi.fn(),
     findOneOrFail: vi.fn(),
     deleteByAddress: vi.fn(),
@@ -114,6 +115,20 @@ describe('UsersRepository', () => {
       userEncryptionService,
       walletEncryptionService,
     );
+  });
+
+  it('checks active wallet ownership without reading or decrypting the user email', async () => {
+    const userId = faker.number.int({ min: 1 });
+    const address = getAddress(faker.finance.ethereumAddress());
+    walletsRepository.isLinkedToActiveUser.mockResolvedValueOnce(true);
+    await expect(target.isActiveWalletOwner(userId, address)).resolves.toBe(
+      true,
+    );
+    expect(walletsRepository.isLinkedToActiveUser).toHaveBeenCalledWith(
+      address,
+      userId,
+    );
+    expect(userEncryptionService.decryptUserEmails).not.toHaveBeenCalled();
   });
 
   describe('findOrCreateByWalletAddress', () => {

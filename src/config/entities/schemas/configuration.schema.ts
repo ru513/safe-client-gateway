@@ -138,6 +138,14 @@ export const RootConfigurationSchema = z
     SES_AWS_SECRET_ACCESS_KEY: z.string().optional(),
     FF_SES_EMAIL: z.string().optional(),
     FF_BILLING_SERVICE: z.string().optional(),
+    PYLON_WALLET_ALIAS_SECRET: z.string().optional(),
+    FF_AUTH: z.string().optional(),
+    FF_OIDC_AUTH: z.string().optional(),
+    FF_USERS: z.string().optional(),
+    PYLON_APP_ID: z.string().optional(),
+    PYLON_JWT_SECRET: z.string().optional(),
+    PYLON_PREMIUM_APP_ID: z.string().optional(),
+    PYLON_PREMIUM_JWT_SECRET: z.string().optional(),
     FF_MFA_STEP_UP: z.string().optional(),
     BLOCKLIST_ENCRYPTED_DATA: z.string(),
     BLOCKLIST_SECRET_KEY: z.string(),
@@ -265,6 +273,54 @@ export const RootConfigurationSchema = z
     CAPTCHA_SECRET_KEY: z.string().optional(),
   })
   .superRefine((config, ctx) => {
+    const hasSupportConfiguration = [
+      config.PYLON_APP_ID,
+      config.PYLON_JWT_SECRET,
+      config.PYLON_PREMIUM_APP_ID,
+      config.PYLON_PREMIUM_JWT_SECRET,
+      config.PYLON_WALLET_ALIAS_SECRET,
+    ].some((value) => Boolean(value?.trim()));
+    if (hasSupportConfiguration) {
+      if (
+        !config.PYLON_WALLET_ALIAS_SECRET ||
+        config.PYLON_WALLET_ALIAS_SECRET.trim().length < 32
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'must contain at least 32 characters when Pylon support is configured',
+          path: ['PYLON_WALLET_ALIAS_SECRET'],
+        });
+      }
+      for (const field of [
+        'PYLON_APP_ID',
+        'PYLON_JWT_SECRET',
+        'PYLON_PREMIUM_APP_ID',
+        'PYLON_PREMIUM_JWT_SECRET',
+      ] as const) {
+        if (!config[field]?.trim()) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'is required when Pylon support is configured',
+            path: [field],
+          });
+        }
+      }
+      for (const field of [
+        'FF_AUTH',
+        'FF_OIDC_AUTH',
+        'FF_USERS',
+        'FF_BILLING_SERVICE',
+      ] as const) {
+        if (config[field]?.toLowerCase() !== 'true') {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'must be true when Pylon support is configured',
+            path: [field],
+          });
+        }
+      }
+    }
     // These fields are only required in deployed (production/staging) environments.
     const isDeployedEnv =
       !!config.CGW_ENV && ['production', 'staging'].includes(config.CGW_ENV);

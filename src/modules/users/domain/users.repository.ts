@@ -246,6 +246,13 @@ export class UsersRepository implements IUsersRepository {
     await this.walletsRepository.deleteByAddress(args.walletAddress);
   }
 
+  public isActiveWalletOwner(
+    userId: User['id'],
+    address: Address,
+  ): Promise<boolean> {
+    return this.walletsRepository.isLinkedToActiveUser(address, userId);
+  }
+
   public async findByWalletAddressOrFail(address: Address): Promise<User> {
     const user = await this.findByWalletAddress(address);
 

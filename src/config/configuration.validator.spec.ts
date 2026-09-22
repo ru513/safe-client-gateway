@@ -77,6 +77,91 @@ describe('Configuration validator', () => {
     TX_SERVICE_API_KEY: faker.string.hexadecimal({ length: 32 }),
   };
 
+  describe('support configuration', () => {
+    const supportConfiguration = {
+      ...validConfiguration,
+      FF_AUTH: 'true',
+      FF_OIDC_AUTH: 'true',
+      FF_USERS: 'true',
+      FF_BILLING_SERVICE: 'true',
+      PYLON_APP_ID: faker.string.uuid(),
+      PYLON_JWT_SECRET: faker.string.alphanumeric(64),
+      PYLON_PREMIUM_APP_ID: faker.string.uuid(),
+      PYLON_PREMIUM_JWT_SECRET: faker.string.alphanumeric(64),
+      PYLON_WALLET_ALIAS_SECRET: faker.string.alphanumeric(64),
+    };
+
+    it.each([undefined, '', '   '])(
+      'allows support to remain unconfigured: %s',
+      (value) => {
+        expect(
+          RootConfigurationSchema.safeParse({
+            ...validConfiguration,
+            PYLON_APP_ID: value,
+            PYLON_JWT_SECRET: value,
+            PYLON_PREMIUM_APP_ID: value,
+            PYLON_PREMIUM_JWT_SECRET: value,
+            PYLON_WALLET_ALIAS_SECRET: value,
+          }).success,
+        ).toBe(true);
+      },
+    );
+
+    it.each([undefined, '', 'short', ' '.repeat(32)])(
+      'requires a stable alias secret when Pylon support is configured: %s',
+      (secret) => {
+        expect(
+          RootConfigurationSchema.safeParse({
+            ...supportConfiguration,
+            PYLON_WALLET_ALIAS_SECRET: secret,
+          }).success,
+        ).toBe(false);
+      },
+    );
+
+    it.each([
+      'PYLON_APP_ID',
+      'PYLON_JWT_SECRET',
+      'PYLON_PREMIUM_APP_ID',
+      'PYLON_PREMIUM_JWT_SECRET',
+      'PYLON_WALLET_ALIAS_SECRET',
+    ] as const)('rejects partial configuration containing only %s', (field) => {
+      expect(
+        RootConfigurationSchema.safeParse({
+          ...validConfiguration,
+          [field]: supportConfiguration[field],
+        }).success,
+      ).toBe(false);
+    });
+
+    it('accepts complete support configuration', () => {
+      expect(
+        RootConfigurationSchema.safeParse(supportConfiguration).success,
+      ).toBe(true);
+    });
+
+    it.each([
+      'PYLON_APP_ID',
+      'PYLON_JWT_SECRET',
+      'PYLON_PREMIUM_APP_ID',
+      'PYLON_PREMIUM_JWT_SECRET',
+      'PYLON_WALLET_ALIAS_SECRET',
+      'FF_AUTH',
+      'FF_OIDC_AUTH',
+      'FF_USERS',
+      'FF_BILLING_SERVICE',
+    ])('requires %s when Pylon support is configured', (field) => {
+      const result = RootConfigurationSchema.safeParse(
+        omit(supportConfiguration, field),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([expect.objectContaining({ path: [field] })]),
+        );
+    });
+  });
+
   it('should bypass this validation on test environment', () => {
     process.env.NODE_ENV = 'test';
     const expected: Record<string, unknown> = JSON.parse(fakeJson());

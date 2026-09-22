@@ -1086,6 +1086,13 @@ export default () => ({
       10,
     ),
   },
+  support: {
+    pylonWalletAliasSecret: process.env.PYLON_WALLET_ALIAS_SECRET,
+    pylonAppId: process.env.PYLON_APP_ID,
+    pylonJwtSecret: process.env.PYLON_JWT_SECRET,
+    pylonPremiumAppId: process.env.PYLON_PREMIUM_APP_ID,
+    pylonPremiumJwtSecret: process.env.PYLON_PREMIUM_JWT_SECRET,
+  },
   captcha: {
     enabled: process.env.CAPTCHA_ENABLED?.toLowerCase() === 'true',
     secretKey: process.env.CAPTCHA_SECRET_KEY,

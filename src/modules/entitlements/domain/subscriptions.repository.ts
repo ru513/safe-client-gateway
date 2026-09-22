@@ -27,6 +27,21 @@ export class SubscriptionsRepository implements ISubscriptionsRepository {
     private readonly postgresDatabaseService: PostgresDatabaseService,
   ) {}
 
+  public async hasActiveSubscriptionForUser(userId: number): Promise<boolean> {
+    const repository =
+      await this.postgresDatabaseService.getRepository(SpaceSubscription);
+    return repository.existsBy({
+      status: In([...ACTIVE_SUBSCRIPTION_STATUSES]),
+      space: {
+        status: 'ACTIVE',
+        members: {
+          status: 'ACTIVE',
+          user: { id: userId, status: 'ACTIVE' },
+        },
+      },
+    });
+  }
+
   public async getActiveSubscriptionBySpaceId(
     spaceId: Space['id'],
     entityManager?: EntityManager,

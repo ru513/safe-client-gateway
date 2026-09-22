@@ -352,6 +352,68 @@ describe('WalletsRepository', () => {
     });
   });
 
+  describe('isLinkedToActiveUser', () => {
+    it.each([false, true])(
+      'checks plaintext or indexed ownership, pending users and reassignment (encrypted=%s)',
+      async (encrypted) => {
+        const address = getAddress(faker.finance.ethereumAddress());
+        const addressIndex = faker.string.alphanumeric(64);
+        const userId = (
+          await dataSource.getRepository(User).insert({ status: 'ACTIVE' })
+        ).identifiers[0].id as number;
+        const otherUserId = (
+          await dataSource.getRepository(User).insert({ status: 'ACTIVE' })
+        ).identifiers[0].id as number;
+        const encryption = createMockWalletEncryptionService();
+        encryption.addressIndex.mockReturnValue(
+          encrypted ? addressIndex : null,
+        );
+        const repository = new WalletsRepository(
+          postgresDatabaseService,
+          encryption,
+        );
+        const inserted = await dataSource.getRepository(Wallet).insert({
+          address: encrypted
+            ? `kms:v1:${faker.string.alphanumeric(24)}`
+            : address,
+          addressIndex: encrypted ? addressIndex : null,
+          user: { id: userId },
+        });
+        await expect(
+          repository.isLinkedToActiveUser(address, userId),
+        ).resolves.toBe(true);
+        await expect(
+          repository.isLinkedToActiveUser(address, otherUserId),
+        ).resolves.toBe(false);
+        await dataSource
+          .getRepository(User)
+          .update(userId, { status: 'PENDING' });
+        await expect(
+          repository.isLinkedToActiveUser(address, userId),
+        ).resolves.toBe(false);
+        await dataSource
+          .getRepository(User)
+          .update(userId, { status: 'ACTIVE' });
+        await dataSource
+          .getRepository(Wallet)
+          .update(inserted.identifiers[0].id, { user: { id: otherUserId } });
+        await expect(
+          repository.isLinkedToActiveUser(address, userId),
+        ).resolves.toBe(false);
+        await expect(
+          repository.isLinkedToActiveUser(address, otherUserId),
+        ).resolves.toBe(true);
+        await dataSource
+          .getRepository(Wallet)
+          .delete(inserted.identifiers[0].id);
+        await expect(
+          repository.isLinkedToActiveUser(address, otherUserId),
+        ).resolves.toBe(false);
+        expect(encryption.decryptWallets).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('findOneByAddressOrFail', () => {
     it('should find a wallet by address', async () => {
       const dbWalletRepository = dataSource.getRepository(Wallet);

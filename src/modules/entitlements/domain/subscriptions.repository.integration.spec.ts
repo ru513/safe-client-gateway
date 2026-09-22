@@ -109,7 +109,9 @@ describe('SubscriptionsRepository', () => {
 
     // Delete in dependency order; the subscription rows reference the space.
     await deleteAll(SpaceSubscription);
+    await deleteAll(Member);
     await deleteAll(Space);
+    await deleteAll(User);
   });
 
   afterAll(async () => {
@@ -156,6 +158,133 @@ describe('SubscriptionsRepository', () => {
     });
     return planId;
   }
+
+  describe('hasActiveSubscriptionForUser', () => {
+    async function createMember(
+      spaceId: number,
+      status: Member['status'] = 'ACTIVE',
+      userId?: number,
+      role: Member['role'] = 'MEMBER',
+    ): Promise<number> {
+      const id =
+        userId ??
+        ((await dataSource.getRepository(User).insert({ status: 'ACTIVE' }))
+          .identifiers[0].id as number);
+      await dataSource.getRepository(Member).insert({
+        user: { id },
+        space: { id: spaceId },
+        name: nameBuilder(),
+        status,
+        role,
+      });
+      return id;
+    }
+
+    it.each([
+      'active',
+      'trialing',
+      'canceled',
+      'past_due',
+      'unpaid',
+      'paused',
+      'incomplete',
+      'incomplete_expired',
+    ] as const)('follows billing subscription status %s', async (status) => {
+      const spaceId = await createSpace();
+      const userId = await createMember(spaceId);
+      await subscribe(spaceId, status);
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(status === 'active' || status === 'trialing');
+    });
+
+    it.each(['INVITED', 'DECLINED'] as const)(
+      'excludes %s membership even with an active subscription',
+      async (status) => {
+        const spaceId = await createSpace();
+        const userId = await createMember(spaceId, status);
+        await subscribe(spaceId, 'active');
+        await expect(
+          subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+        ).resolves.toBe(false);
+      },
+    );
+
+    it('checks all memberships in one query without loading feature data or requiring a Safe', async () => {
+      const first = await createSpace();
+      const userId = await createMember(first);
+      await subscribe(first, 'canceled');
+      const second = await createSpace();
+      await createMember(second, 'ACTIVE', userId, 'ADMIN');
+      await subscribe(second, 'active');
+      const queries = vi.spyOn(dataSource.logger, 'logQuery');
+      try {
+        await expect(
+          subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+        ).resolves.toBe(true);
+        expect(queries).toHaveBeenCalledTimes(1);
+        expect(queries.mock.calls[0][0]).toContain('EXISTS');
+        expect(queries.mock.calls[0][0]).not.toContain('entitlements');
+      } finally {
+        queries.mockRestore();
+      }
+    });
+
+    it('does not borrow another user subscription', async () => {
+      const paid = await createSpace();
+      await createMember(paid);
+      await subscribe(paid, 'active');
+      const free = await createSpace();
+      const userId = await createMember(free);
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(false);
+    });
+
+    it('immediately reflects cancellation and removed memberships without a cache', async () => {
+      const spaceId = await createSpace();
+      const userId = await createMember(spaceId);
+      await subscribe(spaceId, 'active');
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(true);
+      await dataSource
+        .getRepository(SpaceSubscription)
+        .update({ space: { id: spaceId } }, { status: 'canceled' });
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(false);
+      await subscribe(spaceId, 'trialing');
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(true);
+      await dataSource.getRepository(Member).delete({ user: { id: userId } });
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(false);
+    });
+
+    it('excludes a pending user and a non-active stored Workspace', async () => {
+      const spaceId = await createSpace();
+      const userId = await createMember(spaceId);
+      await subscribe(spaceId, 'active');
+      await dataSource
+        .getRepository(User)
+        .update(userId, { status: 'PENDING' });
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(false);
+      await dataSource.getRepository(User).update(userId, { status: 'ACTIVE' });
+      // Boundary for an unknown/non-active numeric state; current SpaceStatus only exposes ACTIVE.
+      await dataSource.query('UPDATE spaces SET status = $1 WHERE id = $2', [
+        0,
+        spaceId,
+      ]);
+      await expect(
+        subscriptionsRepository.hasActiveSubscriptionForUser(userId),
+      ).resolves.toBe(false);
+    });
+  });
 
   describe('getSubscriptionSummary', () => {
     it('should report a space that never subscribed', async () => {

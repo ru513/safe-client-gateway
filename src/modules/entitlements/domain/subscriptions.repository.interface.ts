@@ -15,6 +15,9 @@ export type SpaceSubscriptionSummary = {
 
 /** Queries over the `subscriptions` table. */
 export interface ISubscriptionsRepository {
+  /** Whether an active user has an active membership with an active-slot subscription. */
+  hasActiveSubscriptionForUser(userId: number): Promise<boolean>;
+
   /**
    * The subscription holding the workspace's single active slot, with its
    * entitlement package and each row's feature.

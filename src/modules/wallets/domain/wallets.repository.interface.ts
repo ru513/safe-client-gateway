@@ -37,6 +37,8 @@ export interface IWalletsRepository {
     relations?: FindOptionsRelations<Wallet>;
   }): Promise<Array<Wallet>>;
 
+  isLinkedToActiveUser(address: Address, userId: User['id']): Promise<boolean>;
+
   findOneByAddressOrFail(
     address: Address,
     relations?: FindOptionsRelations<Wallet>,

@@ -74,6 +74,18 @@ export class WalletsRepository implements IWalletsRepository {
     return await walletRepository.find(args);
   }
 
+  public async isLinkedToActiveUser(
+    address: Address,
+    userId: User['id'],
+  ): Promise<boolean> {
+    const repository = await this.postgresDatabaseService.getRepository(Wallet);
+    const addressIndex = this.walletEncryptionService.addressIndex(address);
+    return repository.existsBy({
+      ...(addressIndex ? { addressIndex } : { address }),
+      user: { id: userId, status: 'ACTIVE' },
+    });
+  }
+
   public async findOneByAddressOrFail(
     address: Address,
     relations?: FindOptionsRelations<Wallet>,

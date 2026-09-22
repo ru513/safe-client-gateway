@@ -11,6 +11,7 @@ import { WalletsRepository } from '@/modules/wallets/domain/wallets.repository';
 
 describe('WalletsRepository', () => {
   let walletRepository: {
+    existsBy: Mock;
     find: Mock;
     findOne: Mock;
     delete: Mock;
@@ -23,6 +24,7 @@ describe('WalletsRepository', () => {
     vi.resetAllMocks();
 
     walletRepository = {
+      existsBy: vi.fn(),
       find: vi.fn(),
       findOne: vi.fn(),
       delete: vi.fn(),
@@ -115,6 +117,30 @@ describe('WalletsRepository', () => {
       });
       expect(wallet?.address).toBe(address);
     });
+  });
+
+  describe('isLinkedToActiveUser', () => {
+    it.each([false, true])(
+      'checks ownership using the index when encrypted=%s without decrypting data',
+      async (encrypted) => {
+        const address = getAddress(faker.finance.ethereumAddress());
+        const userId = faker.number.int({ min: 1 });
+        const addressIndex = faker.string.alphanumeric(64);
+        walletEncryptionService.addressIndex.mockReturnValue(
+          encrypted ? addressIndex : null,
+        );
+        walletRepository.existsBy.mockResolvedValue(true);
+        await expect(
+          target.isLinkedToActiveUser(address, userId),
+        ).resolves.toBe(true);
+        expect(walletRepository.existsBy).toHaveBeenCalledWith({
+          ...(encrypted ? { addressIndex } : { address }),
+          user: { id: userId, status: 'ACTIVE' },
+        });
+        expect(walletRepository.findOne).not.toHaveBeenCalled();
+        expect(walletEncryptionService.decryptWallets).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('findByUser', () => {

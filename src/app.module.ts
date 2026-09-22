@@ -63,6 +63,7 @@ import { SafeModule } from '@/modules/safe/safe.module';
 import { SafeAppsModule } from '@/modules/safe-apps/safe-apps.module';
 import { SafeShieldModule } from '@/modules/safe-shield/safe-shield.module';
 import { SpacesModule } from '@/modules/spaces/spaces.module';
+import { SupportModule } from '@/modules/support/support.module';
 import { SurveysModule } from '@/modules/surveys/surveys.module';
 import { TargetedMessagingModule } from '@/modules/targeted-messaging/targeted-messaging.module';
 import { TransactionsModule } from '@/modules/transactions/transactions.module';
@@ -78,6 +79,7 @@ import { RouteLoggerInterceptor } from '@/routes/common/interceptors/route-logge
 @Module({})
 export class AppModule implements NestModule {
   static register(configFactory = configuration): DynamicModule {
+    const config = configFactory();
     const {
       auth: isAuthFeatureEnabled,
       oidc_auth: isOidcAuthFeatureEnabled,
@@ -85,7 +87,7 @@ export class AppModule implements NestModule {
       email: isEmailFeatureEnabled,
       zerionPositions: isZerionPositionsFeatureEnabled,
       billingService: isBillingServiceFeatureEnabled,
-    } = configFactory().features;
+    } = config.features;
 
     return {
       module: AppModule,
@@ -93,6 +95,7 @@ export class AppModule implements NestModule {
         PostgresDatabaseModule,
         // features
         AboutModule,
+        SupportModule.register(config.support.pylonAppId),
         ...(isAuthFeatureEnabled ? [AuthModule] : []),
         ...(isOidcAuthFeatureEnabled ? [OidcAuthModule] : []),
         BalancesModule,

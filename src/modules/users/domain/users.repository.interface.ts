@@ -57,6 +57,8 @@ export interface IUsersRepository {
     authPayload: AuthPayload;
   }): Promise<void>;
 
+  isActiveWalletOwner(userId: User['id'], address: Address): Promise<boolean>;
+
   findByWalletAddressOrFail(address: Address): Promise<User>;
 
   findByWalletAddress(address: Address): Promise<User | undefined>;
