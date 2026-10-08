@@ -85,7 +85,10 @@ export default defineConfig({
           environment: 'node',
           env: { TZ: 'UTC' },
           clearMocks: true,
-          include: ['src/**/*.integration.spec.ts'],
+          include: [
+            'src/**/*.integration.spec.ts',
+            'scripts/**/*.integration.spec.ts',
+          ],
           exclude: sharedExclude,
           setupFiles: ['./test/e2e-setup.ts', './test/faker-setup.ts'],
           testTimeout: 60000,
